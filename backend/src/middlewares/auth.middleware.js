@@ -1,20 +1,23 @@
 const jwt = require("jsonwebtoken");
-const env = require("./env");
+const env = require("../config/env");
 
 const protect = (req, res, next) => {
   const authHeader = req.headers.authorization;
+
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
   try {
-    token = authHeader.split(" ")[1];
+    const token = authHeader.split(" ")[1]; // declare properly
+
     const decoded = jwt.verify(token, env.JWT_SECRET);
 
-    req.user = decoded;
+    req.user = decoded; // now req.user.id will work
     next();
   } catch (err) {
     return res.status(401).json({ message: "Invalid Token" });
   }
 };
+
 module.exports = protect;
