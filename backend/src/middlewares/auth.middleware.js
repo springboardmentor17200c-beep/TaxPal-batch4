@@ -9,11 +9,11 @@ const protect = (req, res, next) => {
   }
 
   try {
-    const token = authHeader.split(" ")[1]; // declare properly
+    const token = authHeader.split(" ")[1];
 
     const decoded = jwt.verify(token, env.JWT_SECRET);
 
-    req.user = decoded; // now req.user.id will work
+    req.user = decoded;
     next();
   } catch (err) {
     return res.status(401).json({ message: "Invalid Token" });
