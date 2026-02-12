@@ -1,18 +1,21 @@
+const { successResponse } = require("../utils/response");
 const transactionService = require("../services/transaction.service");
-//Creates Transaction
-//POST /transactions
-exports.createTransaction = async (req, res) => {
+
+/**
+ * POST /transactions
+ */
+exports.createTransaction = async (req, res, next) => {
   try {
-    const userId = req.user.id; // extracted from JWT middleware
+    const userId = req.user.id;
 
     const { type, amount, category, date } = req.body;
 
-    //Basic validation
     if (!type || !amount || !category || !date) {
-      return res.status(400).json({
-        success: false,
-        message: "All fields (type, amount, category, date) are required",
-      });
+      const error = new Error(
+        "All fields (type, amount, category, date) are required",
+      );
+      error.statusCode = 400;
+      throw error;
     }
 
     const transaction = await transactionService.createTransaction(userId, {
@@ -22,35 +25,63 @@ exports.createTransaction = async (req, res) => {
       date,
     });
 
-    return res.status(201).json({
-      success: true,
-      message: "Transaction created successfully",
-      data: transaction,
-    });
+    successResponse(res, transaction, "Transaction created successfully", 201);
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Failed to create transaction",
-      error: error.message,
-    });
+    next(error);
   }
 };
-//Get All Transactions
-//GET /transactions
-exports.getTransactions = async (req, res) => {
+
+/**
+ * GET /transactions
+ */
+exports.getTransactions = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const transactions = await transactionService.getUserTransactions(userId);
-    return res.status(200).json({
-      success: true,
-      count: transactions.length,
-      data: transactions,
-    });
+
+    const transactions = await transactionService.getTransactions(userId);
+
+    successResponse(res, transactions, "Transactions fetched successfully");
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch transactions",
-      error: error.message,
-    });
+    next(error);
+  }
+};
+
+/**
+ * PUT /transactions/:id
+ */
+exports.updateTransaction = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const transactionId = req.params.id;
+
+    const updatedTransaction = await transactionService.updateTransaction(
+      userId,
+      transactionId,
+      req.body,
+    );
+
+    successResponse(
+      res,
+      updatedTransaction,
+      "Transaction updated successfully",
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * DELETE /transactions/:id
+ */
+exports.deleteTransaction = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const transactionId = req.params.id;
+
+    await transactionService.deleteTransaction(userId, transactionId);
+
+    successResponse(res, null, "Transaction deleted successfully");
+  } catch (error) {
+    next(error);
   }
 };
