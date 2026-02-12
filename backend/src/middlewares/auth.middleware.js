@@ -1,22 +1,25 @@
-const jwt = require("jsonwebtoken");
-const env = require("../config/env");
+const { verifyToken } = require("../config/jwt");
 
 const protect = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-
   try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      const error = new Error("Unauthorized");
+      error.statusCode = 401;
+      throw error;
+    }
+
     const token = authHeader.split(" ")[1];
 
-    const decoded = jwt.verify(token, env.JWT_SECRET);
+    const decoded = verifyToken(token);
 
     req.user = decoded;
+
     next();
   } catch (err) {
-    return res.status(401).json({ message: "Invalid Token" });
+    err.statusCode = 401;
+    next(err);
   }
 };
 
