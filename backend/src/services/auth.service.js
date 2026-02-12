@@ -1,37 +1,56 @@
 const bcrypt = require("bcryptjs");
 const User = require("../models/user.model");
-const generateToken = require("../config/jwt");
+const { generateToken } = require("../config/jwt");
 
 const registerUser = async ({ name, email, password }) => {
   const existingUser = await User.findOne({ email });
+
   if (existingUser) {
-    throw new Error("User already exists");
+    const error = new Error("User already exists");
+    error.statusCode = 409;
+    throw error;
   }
+
   const hashedPassword = await bcrypt.hash(password, 10);
+
   const user = await User.create({
     name,
     email,
     password: hashedPassword,
   });
+
+  // Remove password before returning
+  const userObj = user.toObject();
+  delete userObj.password;
+
   const token = generateToken({ id: user._id });
 
-  return { user, token };
+  return { user: userObj, token };
 };
 
 const loginUser = async ({ email, password }) => {
   const user = await User.findOne({ email }).select("+password");
 
   if (!user) {
-    throw new Error("Invalid credentials");
+    const error = new Error("Invalid credentials");
+    error.statusCode = 401;
+    throw error;
   }
 
   const isMatch = await bcrypt.compare(password, user.password);
+
   if (!isMatch) {
-    throw new Error("Invalid credentials");
+    const error = new Error("Invalid credentials");
+    error.statusCode = 401;
+    throw error;
   }
 
+  const userObj = user.toObject();
+  delete userObj.password;
+
   const token = generateToken({ id: user._id });
-  return { user, token };
+
+  return { user: userObj, token };
 };
 
 module.exports = {
