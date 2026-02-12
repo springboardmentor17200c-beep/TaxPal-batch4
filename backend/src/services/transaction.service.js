@@ -15,7 +15,7 @@ const createTransaction = async (userId, data) => {
   }
 
   const transaction = await Transaction.create({
-    user_id: userId,
+    user: userId,
     type,
     amount,
     category,
@@ -29,7 +29,7 @@ const createTransaction = async (userId, data) => {
  * Get All Transactions for Logged-in User
  */
 const getTransactions = async (userId) => {
-  const transactions = await Transaction.find({ user_id: userId }).sort({
+  const transactions = await Transaction.find({ user: userId }).sort({
     date: -1,
   });
 
@@ -55,7 +55,7 @@ const updateTransaction = async (userId, transactionId, updateData) => {
   }
 
   // Ownership check
-  if (transaction.user_id.toString() !== userId) {
+  if (transaction.user.toString() !== userId) {
     const error = new Error("Unauthorized access");
     error.statusCode = 403;
     throw error;
@@ -94,7 +94,7 @@ const deleteTransaction = async (userId, transactionId) => {
   }
 
   // Ownership check
-  if (transaction.user_id.toString() !== userId) {
+  if (transaction.user.toString() !== userId) {
     const error = new Error("Unauthorized access");
     error.statusCode = 403;
     throw error;
