@@ -144,4 +144,3 @@ const TransactionForm = ({ type = "income", onSuccess, useMock = false }) => {
 };
 
 export default TransactionForm;
-
