@@ -1,207 +1,409 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+} from "chart.js";
+import { Bar, Pie } from "react-chartjs-2";
+import MainLayout from "../layouts/MainLayout";
+import SummaryCard from "../components/dashboard/SummaryCard";
+import TransactionList from "../components/dashboard/TransactionList";
+import apiClient from "../api/apiClient";
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
+const getInitialFormData = () => ({
+  category: "",
+  amount: "",
+  date: new Date().toISOString().split("T")[0],
+});
 
 export default function Dashboard() {
-  const navigate = useNavigate();
-  const [transactions, setTransactions] = useState([]);
-  const [incomeForm, setIncomeForm] = useState({ amount: "", category: "" });
-  const [expenseForm, setExpenseForm] = useState({ amount: "", category: "" });
-  const [showIncomeModal, setShowIncomeModal] = useState(false);
-  const [showExpenseModal, setShowExpenseModal] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  useEffect(() => {
-    fetchTransactions();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [transactionType, setTransactionType] = useState("income");
+  const [formData, setFormData] = useState(getInitialFormData());
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalError, setModalError] = useState("");
+
+  const fetchSummary = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await apiClient.get("/dashboard/summary");
+      const data = response.data.data;
+      setSummary(data);
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to load summary");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const fetchTransactions = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        navigate("/");
-        return;
-      }
+  useEffect(() => {
+    fetchSummary();
+  }, [fetchSummary]);
 
-      const response = await fetch("http://localhost:5000/api/transactions", {
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setTransactions(data);
-      }
-    } catch (err) {
-      console.error("Failed to fetch transactions");
-    }
+  const handleTransactionChange = () => {
+    setRefreshTrigger((t) => t + 1);
+    fetchSummary();
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    navigate("/");
+  const openModal = (type) => {
+    setTransactionType(type);
+    setFormData(getInitialFormData());
+    setModalError("");
+    setIsModalOpen(true);
   };
 
-  const handleIncomeSubmit = async (e) => {
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setModalError("");
+  };
+
+  const handleModalChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleModalSave = async (e) => {
     e.preventDefault();
-    setLoading(true);
-
+    setModalLoading(true);
+    setModalError("");
     try {
-      const token = localStorage.getItem("token");
-      const response = await fetch("http://localhost:5000/api/transactions/income", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(incomeForm),
+      await apiClient.post("/transactions", {
+        type: transactionType,
+        amount: parseFloat(formData.amount),
+        category: formData.category,
+        date: formData.date,
       });
-
-      if (response.ok) {
-        setIncomeForm({ amount: "", category: "" });
-        setShowIncomeModal(false);
-        fetchTransactions();
-      }
+      closeModal();
+      handleTransactionChange();
     } catch (err) {
-      console.error("Failed to add income");
+      setModalError(err.response?.data?.message || "Failed to add transaction");
     } finally {
-      setLoading(false);
+      setModalLoading(false);
     }
   };
 
-  const handleExpenseSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+  const totalIncome = summary?.totalIncome ?? 0;
+  const totalExpense = summary?.totalExpense ?? 0;
+  const netBalance = summary?.balance ?? 0;
 
-    try {
-      const token = localStorage.getItem("token");
-      const response = await fetch("http://localhost:5000/api/transactions/expense", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json",
+  const barChartData = useMemo(
+    () => ({
+      labels: ["Total Income", "Total Expense"],
+      datasets: [
+        {
+          label: "Amount",
+          data: [totalIncome, totalExpense],
+          backgroundColor: ["#22c55e", "#dc2626"],
         },
-        body: JSON.stringify(expenseForm),
-      });
+      ],
+    }),
+    [totalIncome, totalExpense]
+  );
 
-      if (response.ok) {
-        setExpenseForm({ amount: "", category: "" });
-        setShowExpenseModal(false);
-        fetchTransactions();
-      }
-    } catch (err) {
-      console.error("Failed to add expense");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const expenseBreakdown = useMemo(() => {
+    const transactions = summary?.last5Transactions ?? [];
+    const byCategory = transactions
+      .filter((t) => t.type === "expense")
+      .reduce((acc, t) => {
+        const cat = t.category || "Other";
+        acc[cat] = (acc[cat] || 0) + Number(t.amount);
+        return acc;
+      }, {});
+    return {
+      labels: Object.keys(byCategory),
+      data: Object.values(byCategory),
+    };
+  }, [summary?.last5Transactions]);
 
-  const totalIncome = transactions
-    .filter(t => t.type === 'income')
-    .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
-  const totalExpense = transactions
-    .filter(t => t.type === 'expense')
-    .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
-  const balance = totalIncome - totalExpense;
+  const pieChartData = useMemo(
+    () => ({
+      labels: expenseBreakdown.labels,
+      datasets: [
+        {
+          data: expenseBreakdown.data,
+          backgroundColor: [
+            "#3b82f6",
+            "#22c55e",
+            "#f59e0b",
+            "#ef4444",
+            "#8b5cf6",
+          ],
+        },
+      ],
+    }),
+    [expenseBreakdown]
+  );
+
+  if (loading) {
+    return (
+      <MainLayout>
+        <div style={{ padding: "48px", textAlign: "center", color: "#6b7280" }}>
+          Loading...
+        </div>
+      </MainLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <MainLayout>
+        <div
+          style={{
+            padding: "16px",
+            background: "#fef2f2",
+            color: "#dc2626",
+            borderRadius: "8px",
+          }}
+        >
+          {error}
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
-    <div className="dashboard-container">
-      <header className="dashboard-header">
-        <h1>Dashboard</h1>
-        <button onClick={handleLogout} className="logout-btn">Logout</button>
-      </header>
-
-      {/* Stats Cards */}
-      <div className="stats-grid">
-        <div className="stat-card income">
-          <h3>Total Income</h3>
-          <span className="stat-amount">${totalIncome.toFixed(2)}</span>
-        </div>
-        <div className="stat-card expense">
-          <h3>Total Expense</h3>
-          <span className="stat-amount">${totalExpense.toFixed(2)}</span>
-        </div>
-        <div className="stat-card balance">
-          <h3>Balance</h3>
-          <span className="stat-amount balance-amount">
-            {balance >= 0 ? `$${balance.toFixed(2)}` : `-$${Math.abs(balance).toFixed(2)}`}
-          </span>
-        </div>
+    <MainLayout>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: "12px",
+          marginBottom: "20px",
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => openModal("income")}
+          style={{
+            padding: "10px 20px",
+            backgroundColor: "#22c55e",
+            color: "white",
+            border: "none",
+            borderRadius: "6px",
+            fontSize: "14px",
+            fontWeight: 500,
+            cursor: "pointer",
+          }}
+        >
+          Add Income
+        </button>
+        <button
+          type="button"
+          onClick={() => openModal("expense")}
+          style={{
+            padding: "10px 20px",
+            backgroundColor: "#dc2626",
+            color: "white",
+            border: "none",
+            borderRadius: "6px",
+            fontSize: "14px",
+            fontWeight: 500,
+            cursor: "pointer",
+          }}
+        >
+          Add Expense
+        </button>
       </div>
 
-      {/* Action Buttons */}
-      <div className="action-buttons">
-        <button 
-          className="action-btn income-btn"
-          onClick={() => setShowIncomeModal(true)}
+      {isModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+          onClick={closeModal}
         >
-          + Add Income
-        </button>
-        <button 
-          className="action-btn expense-btn"
-          onClick={() => setShowExpenseModal(true)}
-        >
-          + Add Expense
-        </button>
-      </div>
+          <div
+            style={{
+              backgroundColor: "white",
+              borderRadius: "8px",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+              padding: "24px",
+              width: "100%",
+              maxWidth: "400px",
+              position: "relative",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={closeModal}
+              style={{
+                position: "absolute",
+                top: "12px",
+                right: "12px",
+                background: "none",
+                border: "none",
+                fontSize: "20px",
+                cursor: "pointer",
+                color: "#6b7280",
+              }}
+            >
+              ×
+            </button>
 
-      {/* Transactions List */}
-      <div className="transactions-section">
-        <h2>List of Transactions</h2>
-        {transactions.length === 0 ? (
-          <div className="empty-state">
-            <p>No transactions yet. Add your first income or expense!</p>
-          </div>
-        ) : (
-          <div className="transactions-list">
-            {transactions.map((transaction) => (
-              <div key={transaction._id} className={`transaction-item ${transaction.type}`}>
-                <div className="transaction-info">
-                  <span className="category">{transaction.category}</span>
-                  <span className="date">{new Date(transaction.createdAt).toLocaleDateString()}</span>
-                </div>
-                <span className="amount">${parseFloat(transaction.amount).toFixed(2)}</span>
+            <h3 style={{ margin: "0 0 20px 0", fontSize: "18px" }}>
+              Add {transactionType === "income" ? "Income" : "Expense"}
+            </h3>
+
+            {modalError && (
+              <div
+                style={{
+                  padding: "8px 12px",
+                  backgroundColor: "#fef2f2",
+                  color: "#dc2626",
+                  borderRadius: "6px",
+                  marginBottom: "16px",
+                  fontSize: "13px",
+                }}
+              >
+                {modalError}
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            )}
 
-      {/* Income Modal */}
-      {showIncomeModal && (
-        <div className="modal-overlay" onClick={() => setShowIncomeModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Add Income</h3>
-            <form onSubmit={handleIncomeSubmit}>
-              <input
-                type="number"
-                placeholder="Amount"
-                value={incomeForm.amount}
-                onChange={(e) => setIncomeForm({...incomeForm, amount: e.target.value})}
-                step="0.01"
-                min="0"
-                required
-                disabled={loading}
-              />
-              <input
-                type="text"
-                placeholder="Category (e.g., Salary, Bonus)"
-                value={incomeForm.category}
-                onChange={(e) => setIncomeForm({...incomeForm, category: e.target.value})}
-                required
-                disabled={loading}
-              />
-              <div className="modal-actions">
-                <button 
-                  type="button" 
-                  onClick={() => setShowIncomeModal(false)}
-                  disabled={loading}
+            <form onSubmit={handleModalSave}>
+              <div style={{ marginBottom: "16px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    marginBottom: "6px",
+                  }}
+                >
+                  Category
+                </label>
+                <input
+                  type="text"
+                  name="category"
+                  value={formData.category}
+                  onChange={handleModalChange}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "6px",
+                    fontSize: "14px",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+              <div style={{ marginBottom: "16px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    marginBottom: "6px",
+                  }}
+                >
+                  Amount
+                </label>
+                <input
+                  type="number"
+                  name="amount"
+                  value={formData.amount}
+                  onChange={handleModalChange}
+                  step="0.01"
+                  min="0"
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "6px",
+                    fontSize: "14px",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+              <div style={{ marginBottom: "20px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    marginBottom: "6px",
+                  }}
+                >
+                  Date
+                </label>
+                <input
+                  type="date"
+                  name="date"
+                  value={formData.date}
+                  onChange={handleModalChange}
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "6px",
+                    fontSize: "14px",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+              <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  style={{
+                    padding: "10px 20px",
+                    backgroundColor: "#e5e7eb",
+                    color: "#374151",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontSize: "14px",
+                    cursor: "pointer",
+                  }}
                 >
                   Cancel
                 </button>
-                <button type="submit" disabled={loading}>
-                  {loading ? "Adding..." : "Add Income"}
+                <button
+                  type="submit"
+                  disabled={modalLoading}
+                  style={{
+                    padding: "10px 20px",
+                    backgroundColor: "#3b82f6",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontSize: "14px",
+                    cursor: modalLoading ? "not-allowed" : "pointer",
+                    opacity: modalLoading ? 0.7 : 1,
+                  }}
+                >
+                  {modalLoading ? "Saving..." : "Save"}
                 </button>
               </div>
             </form>
@@ -209,46 +411,114 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Expense Modal */}
-      {showExpenseModal && (
-        <div className="modal-overlay" onClick={() => setShowExpenseModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Add Expense</h3>
-            <form onSubmit={handleExpenseSubmit}>
-              <input
-                type="number"
-                placeholder="Amount"
-                value={expenseForm.amount}
-                onChange={(e) => setExpenseForm({...expenseForm, amount: e.target.value})}
-                step="0.01"
-                min="0"
-                required
-                disabled={loading}
-              />
-              <input
-                type="text"
-                placeholder="Category (e.g., Food, Transport)"
-                value={expenseForm.category}
-                onChange={(e) => setExpenseForm({...expenseForm, category: e.target.value})}
-                required
-                disabled={loading}
-              />
-              <div className="modal-actions">
-                <button 
-                  type="button" 
-                  onClick={() => setShowExpenseModal(false)}
-                  disabled={loading}
-                >
-                  Cancel
-                </button>
-                <button type="submit" disabled={loading}>
-                  {loading ? "Adding..." : "Add Expense"}
-                </button>
-              </div>
-            </form>
+      <div className="dashboard-cards">
+        <SummaryCard
+          title="Total Income"
+          value={`$${Number(totalIncome).toFixed(2)}`}
+          icon="↑"
+        />
+        <SummaryCard
+          title="Total Expense"
+          value={`$${Number(totalExpense).toFixed(2)}`}
+          icon="↓"
+        />
+        <SummaryCard
+          title="Net Balance"
+          value={`$${Number(netBalance).toFixed(2)}`}
+          icon="▣"
+        />
+      </div>
+
+      <div
+        className="dashboard-charts"
+        style={{
+          display: "flex",
+          gap: "16px",
+          marginBottom: "24px",
+          flexWrap: "wrap",
+        }}
+      >
+        <div
+          className="dashboard-chart"
+          style={{
+            flex: 1,
+            minWidth: "280px",
+            backgroundColor: "white",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+            padding: "20px",
+            border: "1px solid #e5e7eb",
+          }}
+        >
+          <h3 className="dashboard-chart-title">Income vs Expense</h3>
+          <div style={{ height: "200px" }}>
+            <Bar
+              data={barChartData}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: { display: false },
+                },
+                scales: {
+                  y: { beginAtZero: true },
+                },
+              }}
+            />
           </div>
         </div>
-      )}
-    </div>
+        <div
+          className="dashboard-chart"
+          style={{
+            flex: 1,
+            minWidth: "280px",
+            backgroundColor: "white",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+            padding: "20px",
+            border: "1px solid #e5e7eb",
+          }}
+        >
+          <h3 className="dashboard-chart-title">Expense Breakdown</h3>
+          <div style={{ height: "200px" }}>
+            {expenseBreakdown.labels.length > 0 ? (
+              <Pie
+                data={pieChartData}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: { position: "bottom" },
+                  },
+                }}
+              />
+            ) : (
+              <div
+                className="dashboard-chart-placeholder"
+                style={{
+                  height: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#9ca3af",
+                  fontSize: "13px",
+                }}
+              >
+                No expense data
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="dashboard-section-title">Recent Transactions</h3>
+        <TransactionList
+          refreshTrigger={refreshTrigger}
+          onTransactionChange={handleTransactionChange}
+          hideTitle
+        />
+      </div>
+    </MainLayout>
   );
-}
+};

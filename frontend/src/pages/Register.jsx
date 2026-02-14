@@ -1,13 +1,28 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import apiClient from "../api/apiClient";
-import { setToken } from "../utils/auth";
+import { Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 const Register = () => {
-  const [formData, setFormData] = useState({ name: "", email: "", password: "" });
+  const { register } = useAuth();
+
+  const [formData, setFormData] = useState({
+    username: "",
+    password: "",
+    name: "",
+    email: "",
+    country: "",
+    incomeBracket: "",
+  });
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const navigate = useNavigate();
+
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -15,90 +30,125 @@ const Register = () => {
     setError("");
 
     try {
-      // ✅ SENDS: POST http://localhost:5000/api/auth/register  
-      // ✅ BODY: { name, email, password }
-      const response = await apiClient.post("/auth/register", formData);
-      
-      // ✅ Backend returns: { token: "jwt...", user: {...} }
-      setToken(response.data.token); // Auto-login
-      navigate("/dashboard");
+      await register({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        country: formData.country,
+        incomeBracket: formData.incomeBracket || undefined,
+      });
     } catch (err) {
-      // ✅ Backend errors: { message: "Email already exists" }
-      setError(err.response?.data?.message || "Registration failed");
+      setError(err?.message || err || "Registration failed");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-  <div className="auth-page">
-    <div className="auth-card">
-      <div className="text-center mb-10">
-        <h1 className="auth-title">TaxPal</h1>
-        <p className="auth-subtitle">Create your account</p>
-      </div>
+    <div className="login-page">
+      <div className="login-card">
+        <h1 className="login-title">Create an Account</h1>
+        <p className="login-subtitle">Fill in your details to get started</p>
 
-      {error && (
-        <div className="error-alert">
-          {error}
-        </div>
-      )}
+        {error && <div className="login-error">{error}</div>}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div>
-          <label className="form-label">Full Name</label>
-          <input
-            type="text"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            className="form-input"
-            placeholder="username"
-            required
-          />
-        </div>
+        <form onSubmit={handleSubmit} className="login-form">
+          <div className="login-field">
+            <label className="login-label">Username</label>
+            <input
+              type="text"
+              name="username"
+              value={formData.username}
+              onChange={handleChange}
+              className="login-input"
+              required
+            />
+          </div>
 
-        <div>
-          <label className="form-label">Email</label>
-          <input
-            type="email"
-            value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            className="form-input"
-            placeholder=""
-            required
-          />
-        </div>
+          <div className="login-field">
+            <label className="login-label">Password</label>
+            <input
+              type="password"
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              className="login-input"
+              minLength={6}
+              required
+            />
+          </div>
 
-        <div>
-          <label className="form-label">Password</label>
-          <input
-            type="password"
-            value={formData.password}
-            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-            className="form-input"
-            placeholder=""
-            minLength={6}
-            required
-          />
-        </div>
+          <div className="login-field">
+            <label className="login-label">Full Name</label>
+            <input
+              type="text"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              className="login-input"
+              required
+            />
+          </div>
 
-        <button type="submit" disabled={loading} className="btn-primary">
-          {loading ? "Creating account..." : "Create Account"}
-        </button>
-      </form>
+          <div className="login-field">
+            <label className="login-label">Email</label>
+            <input
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              className="login-input"
+              required
+            />
+          </div>
 
-      <div className="text-center mt-8">
-        <p className="text-gray-600 text-lg">
-          Already have an account?{" "}
-          <Link to="/login" className="auth-link">
-            Sign in →
-          </Link>
+          <div className="login-field">
+            <label className="login-label">Country</label>
+            <select
+              name="country"
+              value={formData.country}
+              onChange={handleChange}
+              className="login-input"
+              required
+            >
+              <option value="">Select country</option>
+              <option value="India">India</option>
+              <option value="United States">United States</option>
+              <option value="United Kingdom">United Kingdom</option>
+              <option value="Canada">Canada</option>
+              <option value="Australia">Australia</option>
+              <option value="Germany">Germany</option>
+              <option value="France">France</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div className="login-field">
+            <label className="login-label">Income Bracket (optional)</label>
+            <select
+              name="incomeBracket"
+              value={formData.incomeBracket}
+              onChange={handleChange}
+              className="login-input"
+            >
+              <option value="">Select</option>
+              <option value="low">Low</option>
+              <option value="middle">Middle</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+
+          <button type="submit" disabled={loading} className="login-btn">
+            {loading ? "Creating..." : "Create Account"}
+          </button>
+        </form>
+
+        <p className="login-signup">
+          Already have an account? <Link to="/login">Sign in</Link>
         </p>
       </div>
     </div>
-  </div>
-);
-
+  );
 };
 
 export default Register;

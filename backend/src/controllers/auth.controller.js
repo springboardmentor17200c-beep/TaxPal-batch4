@@ -3,7 +3,7 @@ const { registerUser, loginUser } = require("../services/auth.service");
 
 const register = async (req, res, next) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, country, incomeBracket } = req.body;
 
     if (!name || !email || !password) {
       const error = new Error("All fields are required");
@@ -11,7 +11,13 @@ const register = async (req, res, next) => {
       throw error;
     }
 
-    const result = await registerUser({ name, email, password });
+    const result = await registerUser({
+      name,
+      email,
+      password,
+      country,
+      incomeBracket,
+    });
 
     successResponse(res, result, "User registered successfully", 201);
   } catch (error) {

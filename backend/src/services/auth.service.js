@@ -2,7 +2,13 @@ const bcrypt = require("bcryptjs");
 const User = require("../models/user.model");
 const { generateToken } = require("../config/jwt");
 
-const registerUser = async ({ name, email, password }) => {
+const registerUser = async ({
+  name,
+  email,
+  password,
+  country,
+  incomeBracket,
+}) => {
   const existingUser = await User.findOne({ email });
 
   if (existingUser) {
@@ -17,9 +23,10 @@ const registerUser = async ({ name, email, password }) => {
     name,
     email,
     password: hashedPassword,
+    country,
+    incomeBracket,
   });
 
-  // Remove password before returning
   const userObj = user.toObject();
   delete userObj.password;
 
