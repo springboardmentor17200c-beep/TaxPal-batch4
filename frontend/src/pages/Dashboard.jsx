@@ -121,7 +121,7 @@ export default function Dashboard() {
   );
 
   const expenseBreakdown = useMemo(() => {
-    const transactions = summary?.last5Transactions ?? [];
+    const transactions = summary?.transactions ?? [];
     const byCategory = transactions
       .filter((t) => t.type === "expense")
       .reduce((acc, t) => {
@@ -133,7 +133,7 @@ export default function Dashboard() {
       labels: Object.keys(byCategory),
       data: Object.values(byCategory),
     };
-  }, [summary?.last5Transactions]);
+  }, [summary?.transactions]);
 
   const pieChartData = useMemo(
     () => ({

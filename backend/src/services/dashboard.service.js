@@ -30,6 +30,7 @@ const getDashboardSummary = async (userId) => {
     totalIncome,
     totalExpense,
     balance,
+    transactions,
     last5Transactions,
   };
 };
