@@ -1,34 +1,102 @@
 const Budget = require("../models/budget.model");
 const Transaction = require("../models/transaction.model");
+const { CATEGORIES } = require("../utils/constants");
 
+/**
+ * Create Budget
+ */
 exports.createBudget = async (userId, data) => {
-  return await Budget.create({
-    userId,
-    category: data.category,
-    limit: data.limit,
-    month: data.month,
+  const { category, limit, month } = data;
+
+  // Validation
+  if (!category || !limit || !month) {
+    const error = new Error("Category, limit and month are required");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (!CATEGORIES.includes(category)) {
+    const error = new Error("Invalid category");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (limit <= 0) {
+    const error = new Error("Limit must be greater than 0");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // Prevent duplicate budget for same month + category
+  const existing = await Budget.findOne({
+    user: userId,
+    category,
+    month,
   });
+
+  if (existing) {
+    const error = new Error(
+      "Budget already exists for this category and month"
+    );
+    error.statusCode = 409;
+    throw error;
+  }
+
+  const budget = await Budget.create({
+    user: userId,
+    category,
+    limit,
+    month,
+  });
+
+  return budget;
 };
 
+/**
+ * Get All Budgets for User
+ */
 exports.getBudgets = async (userId) => {
-  return await Budget.find({ userId });
+  return await Budget.find({ user: userId });
 };
 
+/**
+ * Get Budget Progress (Monthly)
+ */
 exports.getBudgetProgress = async (userId, month) => {
-  const budgets = await Budget.find({ userId, month });
+  if (!month) {
+    const error = new Error("Month is required (format: YYYY-MM)");
+    error.statusCode = 400;
+    throw error;
+  }
 
-  const results = [];
+  const budgets = await Budget.find({
+    user: userId,
+    month,
+  });
 
-  for (let budget of budgets) {
-    const transactions = await Transaction.find({
-      userId,
-      category: budget.category,
-      month,
-      type: "expense",
-    });
+  if (!budgets.length) {
+    return [];
+  }
 
-    const spent = transactions.reduce((sum, t) => sum + t.amount, 0);
+  // Create date range from month
+  const start = new Date(`${month}-01`);
+  const end = new Date(start);
+  end.setMonth(end.getMonth() + 1);
+
+  // Fetch all expense transactions once
+  const transactions = await Transaction.find({
+    user: userId,
+    type: "expense",
+    date: { $gte: start, $lt: end },
+  });
+
+  const results = budgets.map((budget) => {
+    const spent = transactions
+      .filter((t) => t.category === budget.category)
+      .reduce((sum, t) => sum + t.amount, 0);
+
     const remaining = budget.limit - spent;
+
     const percentage =
       budget.limit > 0
         ? Math.round((spent / budget.limit) * 100)
@@ -39,15 +107,15 @@ exports.getBudgetProgress = async (userId, month) => {
     else if (percentage <= 100) status = "warning";
     else status = "exceeded";
 
-    results.push({
+    return {
       category: budget.category,
       limit: budget.limit,
       spent,
       remaining,
       percentage,
       status,
-    });
-  }
+    };
+  });
 
   return results;
 };
