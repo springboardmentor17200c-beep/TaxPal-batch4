@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../api/apiClient";
-import { setToken, getToken, removeToken } from "../utils/auth";
+import { setToken, getToken, removeToken, isAuthenticated } from "../utils/auth";
 
 const AuthContext = createContext();
 
@@ -23,6 +23,7 @@ export const AuthProvider = ({ children }) => {
 
     setLoading(false);
   }, []);
+
 
   /**
    * REGISTER
@@ -54,6 +55,8 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+
+
   /**
    * LOGOUT
    */
@@ -63,6 +66,7 @@ export const AuthProvider = ({ children }) => {
     navigate("/login");
   };
 
+
   const value = {
     user,
     loading,
@@ -70,6 +74,7 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     isAuthenticated: !!user,
+  
   };
 
   return (

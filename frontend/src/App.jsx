@@ -5,7 +5,8 @@ import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Transactions from "./pages/Transactions";
 import { getToken } from "./utils/auth";
-
+import MainLayout from "./layouts/MainLayout";
+import Budgets from "./pages/Budgets";
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated } = useAuth();
   const token = getToken();
@@ -14,7 +15,6 @@ const ProtectedRoute = ({ children }) => {
   }
   return children;
 };
-
 function App() {
   return (
     <div className="App">
@@ -35,6 +35,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Transactions />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/budgets"
+          element={
+            <ProtectedRoute>
+              <MainLayout><Budgets /></MainLayout>
             </ProtectedRoute>
           }
         />
