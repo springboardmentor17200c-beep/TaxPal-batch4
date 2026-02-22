@@ -36,7 +36,7 @@ exports.createBudget = async (userId, data) => {
 
   if (existing) {
     const error = new Error(
-      "Budget already exists for this category and month"
+      "Budget already exists for this category and month",
     );
     error.statusCode = 409;
     throw error;
@@ -98,9 +98,7 @@ exports.getBudgetProgress = async (userId, month) => {
     const remaining = budget.limit - spent;
 
     const percentage =
-      budget.limit > 0
-        ? Math.round((spent / budget.limit) * 100)
-        : 0;
+      budget.limit > 0 ? Math.round((spent / budget.limit) * 100) : 0;
 
     let status;
     if (percentage < 70) status = "safe";
@@ -109,6 +107,7 @@ exports.getBudgetProgress = async (userId, month) => {
 
     return {
       category: budget.category,
+      month: budget.month,
       limit: budget.limit,
       spent,
       remaining,
@@ -118,4 +117,35 @@ exports.getBudgetProgress = async (userId, month) => {
   });
 
   return results;
+};
+
+exports.updateBudget = async (userId, id, data) => {
+  const budget = await Budget.findOneAndUpdate(
+    { _id: id, user: userId },
+    data,
+    { new: true },
+  );
+
+  if (!budget) {
+    const error = new Error("Budget not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return budget;
+};
+
+exports.deleteBudget = async (userId, id) => {
+  const budget = await Budget.findOneAndDelete({
+    _id: id,
+    user: userId,
+  });
+
+  if (!budget) {
+    const error = new Error("Budget not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  return;
 };

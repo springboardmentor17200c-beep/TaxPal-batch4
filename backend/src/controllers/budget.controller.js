@@ -56,3 +56,28 @@ exports.getBudgetProgress = async (req, res, next) => {
     next(error);
   }
 };
+exports.updateBudget = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+
+    const updated = await budgetService.updateBudget(userId, id, req.body);
+
+    successResponse(res, updated, "Budget updated");
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.deleteBudget = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+
+    await budgetService.deleteBudget(userId, id);
+
+    successResponse(res, null, "Budget deleted");
+  } catch (error) {
+    next(error);
+  }
+};
