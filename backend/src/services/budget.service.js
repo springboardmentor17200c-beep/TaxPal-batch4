@@ -106,6 +106,7 @@ exports.getBudgetProgress = async (userId, month) => {
     else status = "exceeded";
 
     return {
+      _id: budget._id,
       category: budget.category,
       month: budget.month,
       limit: budget.limit,

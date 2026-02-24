@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import apiClient from "../../api/apiClient";
 
 const CATEGORIES = ["Food", "Rent", "Utilities", "Travel", "Marketing"];
@@ -47,14 +47,17 @@ export default function BudgetForm({
       };
 
       if (editData) {
-        const res = await apiClient.put(
-          `/budgets/${editData._id}`,
-          payload
-        );
-        onBudgetUpdated(res.data.data);
+        await apiClient.put(`/budgets/${editData._id}`, payload);
+
+        if (onBudgetUpdated) {
+          onBudgetUpdated(payload.month);
+        }
       } else {
-        const res = await apiClient.post("/budgets", payload);
-        onBudgetAdded(res.data.data);
+        await apiClient.post("/budgets", payload);
+
+        if (onBudgetAdded) {
+          onBudgetAdded(payload.month);
+        }
       }
 
       handleReset();
@@ -158,8 +161,8 @@ export default function BudgetForm({
             {loading
               ? "Processing..."
               : editData
-              ? "Update Budget"
-              : "Create Budget"}
+                ? "Update Budget"
+                : "Create Budget"}
           </button>
         </div>
       </form>
