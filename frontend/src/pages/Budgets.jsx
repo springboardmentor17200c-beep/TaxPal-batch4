@@ -1,57 +1,52 @@
 import { useEffect, useState } from "react";
 import apiClient from "../api/apiClient";
 import BudgetForm from "../components/budget/BudgetForm";
+import SpendingChart from "../components/charts/SpendingChart";
 
 export default function Budgets() {
   const [budgets, setBudgets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingBudget, setEditingBudget] = useState(null);
-
-  const currentMonth = new Date().toISOString().slice(0, 7);
+  const [selectedMonth, setSelectedMonth] = useState(
+    new Date().toISOString().slice(0, 7),
+  );
+  const [progressData, setProgressData] = useState([]);
 
   const fetchBudgets = async () => {
     try {
       setLoading(true);
 
+      // 1️⃣ Get all budgets
       const budgetRes = await apiClient.get("/budgets");
-      const budgetData = budgetRes.data.data || [];
+      const allBudgets = budgetRes.data.data || [];
 
-      if (budgetData.length === 0) {
+      // 2️⃣ Filter only selected month
+      const monthBudgets = allBudgets.filter((b) => b.month === selectedMonth);
+
+      if (monthBudgets.length === 0) {
         setBudgets([]);
         return;
       }
 
-      // Extract unique months
-      const uniqueMonths = [...new Set(budgetData.map((b) => b.month))];
-
-      // Fetch progress for each month
-      const progressResponses = await Promise.all(
-        uniqueMonths.map((month) =>
-          apiClient.get(`/budgets/progress?month=${month}`),
-        ),
+      // 3️⃣ Fetch progress for selected month
+      const progressRes = await apiClient.get(
+        `/budgets/progress?month=${selectedMonth}`,
       );
 
-      // Merge all progress into single array
-      const allProgress = progressResponses.flatMap(
-        (res) => res.data.data || [],
-      );
+      const progressData = progressRes.data.data || [];
 
-      // Create lookup map: category + month
+      // 4️⃣ Create category lookup
       const progressMap = {};
-      allProgress.forEach((p) => {
-        progressMap[`${p.category}-${p.month}`] = p;
+      progressData.forEach((p) => {
+        progressMap[p.category] = p;
       });
 
-      const merged = budgetData.map((b) => {
-        const key = `${b.category}-${b.month}`;
-        const progress = progressMap[key];
-
-        return {
-          ...b,
-          spent: progress?.spent || 0,
-          status: progress?.status || "safe",
-        };
-      });
+      // 5️⃣ Merge
+      const merged = monthBudgets.map((b) => ({
+        ...b,
+        spent: progressMap[b.category]?.spent || 0,
+        status: progressMap[b.category]?.status || "safe",
+      }));
 
       setBudgets(merged);
     } catch (err) {
@@ -63,7 +58,7 @@ export default function Budgets() {
 
   useEffect(() => {
     fetchBudgets();
-  }, []);
+  }, [selectedMonth]);
 
   const handleDelete = async (id) => {
     if (window.confirm("Are you sure you want to delete this budget?")) {
@@ -90,13 +85,30 @@ export default function Budgets() {
     <div style={{ padding: "30px", maxWidth: "1200px", margin: "0 auto" }}>
       <h1>Budgets</h1>
 
+      {/* 🔥 Month Selector */}
+      <div style={{ marginBottom: "20px" }}>
+        <label style={{ fontWeight: "600", marginRight: "10px" }}>
+          Select Month:
+        </label>
+        <input
+          type="month"
+          value={selectedMonth}
+          onChange={(e) => setSelectedMonth(e.target.value)}
+        />
+      </div>
+
+      {/* 🔥 Spending Chart */}
+      <SpendingChart progress={progressData} month={selectedMonth} />
+
+      {/* 🔥 Budget Form */}
       <BudgetForm
-        onBudgetAdded={() => fetchBudgets()}
-        onBudgetUpdated={() => fetchBudgets()}
+        onBudgetAdded={fetchBudgets}
+        onBudgetUpdated={fetchBudgets}
         editData={editingBudget}
         clearEdit={() => setEditingBudget(null)}
       />
 
+      {/* 🔥 Table */}
       <div
         style={{
           marginTop: "32px",
@@ -143,7 +155,7 @@ export default function Budgets() {
                   colSpan="5"
                   style={{ padding: "20px", textAlign: "center" }}
                 >
-                  No budgets found.
+                  No budgets found for this month.
                 </td>
               </tr>
             ) : (

@@ -7,7 +7,6 @@ const mongoose = require("mongoose");
 const createTransaction = async (userId, data) => {
   const { type, amount, category, date } = data;
 
-  // Extra validation (schema already enforces enum)
   if (!["income", "expense"].includes(type)) {
     const error = new Error("Invalid transaction type");
     error.statusCode = 400;
@@ -19,7 +18,7 @@ const createTransaction = async (userId, data) => {
     type,
     amount,
     category,
-    date,
+    date: new Date(date), // ✅ force Date object
   });
 
   return transaction;
@@ -66,7 +65,11 @@ const updateTransaction = async (userId, transactionId, updateData) => {
 
   allowedFields.forEach((field) => {
     if (updateData[field] !== undefined) {
-      transaction[field] = updateData[field];
+      if (field === "date") {
+        transaction[field] = new Date(updateData[field]);
+      } else {
+        transaction[field] = updateData[field];
+      }
     }
   });
 
