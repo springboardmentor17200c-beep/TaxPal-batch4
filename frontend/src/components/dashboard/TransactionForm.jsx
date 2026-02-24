@@ -1,137 +1,145 @@
 import { useState } from "react";
 import apiClient from "../../api/apiClient";
 
-const TransactionForm = ({ onSuccess }) => {
-  const [formData, setFormData] = useState({
-    type: "income",
+
+const TransactionForm = ({ type = "income", onSuccess, useMock = false }) => {
+  const [form, setForm] = useState({
     amount: "",
     category: "",
-    date: new Date().toISOString().split("T")[0],
+    date: new Date().toISOString().slice(0, 10), 
   });
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  const isIncome = type === "income";
+
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError("");
+    setSubmitting(true);
 
     try {
-      await apiClient.post("/transactions", {
-        type: formData.type,
-        amount: parseFloat(formData.amount),
-        category: formData.category,
-        date: formData.date,
-      });
+      if (!form.amount || !form.category || !form.date) {
+        setError("All fields are required.");
+        return;
+      }
 
-      setFormData({
-        type: "income",
+      const payload = {
+        type,
+        amount: Number(form.amount),
+        category: form.category.trim(),
+        date: form.date, 
+      };
+
+      let created;
+
+      if (useMock) {
+        created = {
+          _id: Date.now().toString(),
+          ...payload,
+          createdAt: new Date(payload.date).toISOString(),
+        };
+        await new Promise((res) => setTimeout(res, 300));
+      } else {
+
+        const res = await apiClient.post("/transactions", payload);
+        created = res?.data?.data ?? null;
+      }
+
+      setForm({
         amount: "",
         category: "",
-        date: new Date().toISOString().split("T")[0],
+        date: new Date().toISOString().slice(0, 10),
       });
 
-      if (onSuccess) onSuccess();
+      if (typeof onSuccess === "function" && created) {
+        onSuccess(created);
+      }
     } catch (err) {
+      console.error("Failed to submit transaction", err);
       setError(
-        err.response?.data?.message || "Failed to add transaction"
+        err?.response?.data?.message ||
+          "Failed to submit transaction. Please try again.",
       );
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm">
-      <h2 className="text-lg font-semibold text-slate-800 mb-4">
-        Add Transaction
-      </h2>
+    <form className="transaction-form" onSubmit={handleSubmit}>
+      <h3 className="transaction-form__title">
+        {isIncome ? "Add Income" : "Add Expense"}
+      </h3>
 
-      {error && (
-        <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">
-          {error}
-        </div>
-      )}
+      {error && <p className="transaction-form__error">{error}</p>}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Type
-            </label>
-            <select
-              name="type"
-              value={formData.type}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="income">Income</option>
-              <option value="expense">Expense</option>
-            </select>
-          </div>
+      <div className="transaction-form__field">
+        <label htmlFor={`${type}-amount`}>Amount</label>
+        <input
+          id={`${type}-amount`}
+          name="amount"
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="0.00"
+          value={form.amount}
+          onChange={handleChange}
+          disabled={submitting}
+          required
+        />
+      </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Amount
-            </label>
-            <input
-              type="number"
-              name="amount"
-              value={formData.amount}
-              onChange={handleChange}
-              step="0.01"
-              min="0"
-              required
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
+      <div className="transaction-form__field">
+        <label htmlFor={`${type}-category`}>Category</label>
+        <input
+          id={`${type}-category`}
+          name="category"
+          type="text"
+          placeholder={
+            isIncome ? "e.g. Salary, Bonus" : "e.g. Food, Transport"
+          }
+          value={form.category}
+          onChange={handleChange}
+          disabled={submitting}
+          required
+        />
+      </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Category
-            </label>
-            <input
-              type="text"
-              name="category"
-              value={formData.category}
-              onChange={handleChange}
-              required
-              placeholder="e.g. Salary, Food"
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
+      <div className="transaction-form__field">
+        <label htmlFor={`${type}-date`}>Date</label>
+        <input
+          id={`${type}-date`}
+          name="date"
+          type="date"
+          value={form.date}
+          onChange={handleChange}
+          disabled={submitting}
+          required
+        />
+      </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Date
-            </label>
-            <input
-              type="date"
-              name="date"
-              value={formData.date}
-              onChange={handleChange}
-              required
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-        </div>
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
-        >
-          {loading ? "Adding..." : "Add Transaction"}
-        </button>
-      </form>
-    </div>
+      <button
+        className={`transaction-form__submit ${
+          isIncome ? "income-btn" : "expense-btn"
+        }`}
+        type="submit"
+        disabled={submitting}
+      >
+        {submitting
+          ? isIncome
+            ? "Adding Income..."
+            : "Adding Expense..."
+          : isIncome
+            ? "+ Add Income"
+            : "+ Add Expense"}
+      </button>
+    </form>
   );
 };
 
